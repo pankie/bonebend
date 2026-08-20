@@ -12,7 +12,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3)
 
-add_executable(bonebend main.c)
+add_executable(bonebend main.c
+        vec.c
+        vec.h)
 
 target_link_libraries(bonebend PRIVATE SDL3::SDL3)
 
