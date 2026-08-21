@@ -46,7 +46,7 @@ void init_mesh(const int32_t ring_count, const  float length, const float half_w
             const int32_t v0 = base + c;
             const int32_t v1 = base + c_next;
             const int32_t v2 = next_base + c_next;
-            const int32_t v3 = next_base + c_next;
+            const int32_t v3 = next_base + c;
 
             // two triangles per quad, with face_t indices being 1 index based
             mesh.faces[mesh.faces_count].a = v0 + 1;

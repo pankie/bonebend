@@ -19,6 +19,12 @@ vec4_t vec4_add(const vec4_t a, const vec4_t b) {
     return result;
 }
 
+vec3_t vec3_sub(vec3_t a, vec3_t b)
+{
+    const vec3_t result = {a.x - b.x, a.y - b.y, a.z - b.z };
+    return result;
+}
+
 vec4_t vec4_mul_scalar(const vec4_t v, const float s) {
     const vec4_t result = { v.x * s, v.y * s, v.z * s, v.w * s };
     return result;

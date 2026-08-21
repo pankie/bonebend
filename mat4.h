@@ -15,7 +15,7 @@ mat4_t mat4_identity(void);
 mat4_t mat4_make_translation(float tx, float ty, float tz);   // T(tx, ty, tz)
 mat4_t mat4_make_rotation_z(float angle_rad);                 // R_z(theta)
 mat4_t mat4_mul_mat4(const mat4_t* a, const mat4_t* b);
-vec4_t mat4_mul_vec4(const mat4_t* m, const vec4_t* v);
+vec4_t mat4_mul_vec4(const mat4_t* m, vec4_t v);
 
 // Inverse for RIGID transforms only (rotation + translation, no scale) -
 // uses the block-matrix shortcut derived in the notes
