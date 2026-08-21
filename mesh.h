@@ -11,14 +11,12 @@
 #include "triangle.h"
 #include "vec.h"
 
-extern uint32_t triangle_count;
-
 typedef struct
 {
     vec3_t vertices[MAX_BOX_VERTICES];
     uint32_t vertices_count;
 
-    face_t faces[MAX_BOX_VERTICES];
+    face_t faces[MAX_BOX_FACES];
     uint32_t faces_count;
 
     vec3_t rotation;

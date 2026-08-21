@@ -196,8 +196,8 @@ void update(void)
     time += dt;
     previous_frame_time = ticks;
 
-    // mesh.rotation.z += 0.1f * dt;
-    // mesh.translation.x = cosf(time);
+    mesh.rotation.z += sinf(time) * 0.025f;
+    mesh.translation.x += cosf(time) * 0.025f;
 
     // rotation and translate the box
     const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
