@@ -14,7 +14,13 @@ FetchContent_MakeAvailable(SDL3)
 
 add_executable(bonebend main.c
         vec.c
-        vec.h)
+        vec.h
+        mat4.c
+        mat4.h
+        mesh.c
+        mesh.h
+        triangle.c
+        triangle.h)
 
 target_link_libraries(bonebend PRIVATE SDL3::SDL3)
 

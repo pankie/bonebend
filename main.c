@@ -1,11 +1,18 @@
 #include <stdlib.h>
 #include <SDL3/SDL.h>
 
+#include "mat4.h"
+#include "mesh.h"
+#include "triangle.h"
 #include "vec.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1280
+#define WINDOW_HEIGHT 720
 #define BUFFER_SIZE WINDOW_WIDTH * WINDOW_HEIGHT
+
+#define FPS 24
+#define FRAME_TARGET_TIME (1000 / FPS)
+static uint64_t previous_frame_time = 0;
 
 #define RED 0xFFFF0000
 #define GREEN 0xFF00FF00
@@ -16,6 +23,11 @@ static SDL_Renderer* renderer = NULL;
 static SDL_Texture* color_buffer_texture = NULL;
 static uint32_t* color_buffer = NULL;
 static bool is_running = false;
+static float time = 0.0f;
+
+#define MAX_TRIANGLES_TO_RENDER 1024
+static triangle_t triangles_to_render[MAX_TRIANGLES_TO_RENDER];
+static uint32_t num_triangles_to_render = 0;
 
 static bool init_window(void)
 {
@@ -83,7 +95,7 @@ static void draw_line(int32_t x0, int32_t y0, const int32_t x1, const int32_t y1
     }
 }
 
-static void draw_filled_circle(const int32_t cx, const int32_t cy, const int32_t radius, uint32_t color)
+static void draw_filled_circle(const int32_t cx, const int32_t cy, const int32_t radius, const uint32_t color)
 {
     for (int y = -radius; y <= radius; y++) {
         for (int x = -radius; x <= radius; x++) {
@@ -103,19 +115,23 @@ static void clear_color_buffer(const uint32_t color)
 }
 
 // project assumes that we are looking down +Z from the origin, translates scene away from camera by z-component
-static vec3_t project(const vec3_t point, const float fov_factor, const float camera_z)
+static vec4_t screen_project(const vec4_t point)
 {
-    float z = point.z + camera_z;
-    z = fmaxf(camera_z, 0.1f);
+    const float fov_factor = 500.0f;
+    const float camera_z = 3.0f;
 
-    vec3_t projected_point;
+    float z = point.z + camera_z;
+    z = fmaxf(z, 0.1f);
+
+    vec4_t projected_point;
     projected_point.x = (fov_factor * point.x) / z + (float) WINDOW_WIDTH / 2;
     projected_point.y = (fov_factor * -point.y) / z + (float) WINDOW_HEIGHT / 2; // flips y so that screen y grows downwards
     projected_point.z = z;
+    projected_point.w = point.w;
     return projected_point;
 }
 
-static void process_events(void)
+static void process_input(void)
 {
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -132,70 +148,118 @@ static void process_events(void)
     }
 }
 
+
+static void draw_triangle(const int32_t x0, const int32_t y0, const int32_t x1, const int32_t y1, const int32_t x2, const int32_t y2, const uint32_t color)
+{
+    draw_line(x0, y0, x1, y1, color);
+    draw_line(x1, y1, x2, y2, color);
+    draw_line(x2, y2, x0, y0, color);
+}
+
+static void draw_type_triangle(const triangle_t* triangle, const uint32_t color)
+{
+    draw_triangle(
+        (int32_t) triangle->points[0].x,
+        (int32_t) triangle->points[0].y,
+        (int32_t) triangle->points[1].x,
+        (int32_t) triangle->points[1].y,
+        (int32_t) triangle->points[2].x,
+        (int32_t) triangle->points[2].y,
+        color
+    );
+}
+
 static void render(void)
 {
     clear_color_buffer(0xFF000000);
 
-    // draw_line(0, 0, WINDOW_WIDTH - 1, WINDOW_HEIGHT - 1, BLUE);
-    // draw_filled_circle(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 25, GREEN);
-
-    float fov_factor = 500.0f;
-    float camera_z = 3.0f;
-
-    const vec3_t cube_vertices[] = {
-        {-1.0f,  1.0f,  0.0f},  // 0: front-top-left
-        { 1.0f,  1.0f,  0.0f},  // 1: front-top-right
-        { 1.0f, -1.0f,  0.0f},  // 2: front-bottom-right
-        {-1.0f, -1.0f,  0.0f},  // 3: front-bottom-left
-        {-1.0f,  1.0f, -1.0f},  // 4: back-top-left
-        { 1.0f,  1.0f, -1.0f},  // 5: back-top-right
-        { 1.0f, -1.0f, -1.0f},  // 6: back-bottom-right
-        {-1.0f, -1.0f, -1.0f}   // 7: back-bottom-left
-    };
-
-    const int cube_edges[12][2] = {
-        // front face
-        {0, 1}, {1, 2}, {2, 3}, {3, 0},
-        // back face
-        {4, 5}, {5, 6}, {6, 7}, {7, 4},
-        // connecting edges (front to back)
-        {0, 4}, {1, 5}, {2, 6}, {3, 7}
-    };
-
-    for (size_t i = 0; i < 12; i++)
+    for (size_t i = 0; i < num_triangles_to_render; i++)
     {
-        const vec3_t v0 = cube_vertices[cube_edges[i][0]];
-        const vec3_t v1 = cube_vertices[cube_edges[i][1]];
-
-        const vec3_t p0 = project(v0, fov_factor, camera_z);
-        const vec3_t p1 = project(v1, fov_factor, camera_z);
-
-        draw_line((int) p0.x, (int) p0.y, (int) p1.x, (int) p1.y, RED);
+        draw_type_triangle(&triangles_to_render[i], GREEN);
     }
-
 
     SDL_UpdateTexture(color_buffer_texture, NULL, color_buffer, WINDOW_WIDTH * sizeof(uint32_t));
     SDL_RenderTexture(renderer, color_buffer_texture, NULL, NULL);
     SDL_RenderPresent(renderer);
 }
 
+void update(void)
+{
+    const int32_t time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - previous_frame_time);
+    if (time_to_wait > 0 && time_to_wait < FRAME_TARGET_TIME)
+    {
+        SDL_Delay(time_to_wait);
+    }
+
+    const uint64_t ticks = SDL_GetTicks();
+    const float dt = (float) (ticks - previous_frame_time) / 1000.0f;
+    time += dt;
+    previous_frame_time = ticks;
+
+    mesh.rotation.z += 0.1f * dt;
+    mesh.translation.x = cosf(time);
+
+    // rotation and translate test
+    const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
+    const mat4_t rotation_matrix_z = mat4_make_rotation_z(mesh.rotation.z);
+
+    mat4_t world_matrix = mat4_identity();
+    world_matrix = mat4_mul_mat4(&rotation_matrix_z, &world_matrix);
+    world_matrix = mat4_mul_mat4(&translate_matrix, &world_matrix);
+
+    num_triangles_to_render = 0;
+
+    for (size_t i = 0; i < N_CUBE_MESH_FACES; i++)
+    {
+        const face_t mesh_face = mesh.faces[i];
+        const vec3_t face_vertices[] =
+        {
+            mesh.vertices[mesh_face.a - 1],
+            mesh.vertices[mesh_face.b - 1],
+            mesh.vertices[mesh_face.c - 1]
+        };
+
+        vec4_t transformed_vertices[3];
+        for (size_t j = 0; j < 3; j++)
+        {
+            vec4_t transformed_vertex = vec4_from_vec3(face_vertices[j]);
+            transformed_vertex = mat4_mul_vec4(&world_matrix, &transformed_vertex);
+            transformed_vertices[j] = transformed_vertex;
+        }
+
+        // project points to screen space
+        vec4_t projected_points[3];
+        for (size_t j = 0; j < 3; j++)
+        {
+            projected_points[j] = screen_project(transformed_vertices[j]);
+        }
+
+        const triangle_t projected_triangle = {
+            .points = {
+                        { projected_points[0].x, projected_points[0].y, projected_points[0].z, projected_points[0].w },
+                        { projected_points[1].x, projected_points[1].y, projected_points[1].z, projected_points[1].w },
+                        { projected_points[2].x, projected_points[2].y, projected_points[2].z, projected_points[2].w }
+            }
+        };
+
+        triangles_to_render[num_triangles_to_render++] = projected_triangle;
+    }
+}
 
 int main(void)
 {
     is_running = init_window();
+    init_mesh();
     if (!is_running)
     {
         return 1;
     }
 
-    uint64_t start_ticks = SDL_GetTicks();
+    previous_frame_time = SDL_GetTicks(); // prevents delta time to be large meaningless spike on first frame
     while (is_running)
     {
-        process_events();
-
-        float time = (float)(SDL_GetTicks() - start_ticks) / 1000.0f;
-
-
+        process_input();
+        update();
         render();
     }
 
