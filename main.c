@@ -196,10 +196,10 @@ void update(void)
     time += dt;
     previous_frame_time = ticks;
 
-    mesh.rotation.z += 0.1f * dt;
-    mesh.translation.x = cosf(time);
+    // mesh.rotation.z += 0.1f * dt;
+    // mesh.translation.x = cosf(time);
 
-    // rotation and translate test
+    // rotation and translate the box
     const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
     const mat4_t rotation_matrix_z = mat4_make_rotation_z(mesh.rotation.z);
 
@@ -209,7 +209,7 @@ void update(void)
 
     num_triangles_to_render = 0;
 
-    for (size_t i = 0; i < N_CUBE_MESH_FACES; i++)
+    for (size_t i = 0; i < mesh.faces_count; i++)
     {
         const face_t mesh_face = mesh.faces[i];
         const vec3_t face_vertices[] =
@@ -249,7 +249,9 @@ void update(void)
 int main(void)
 {
     is_running = init_window();
-    init_mesh();
+    init_mesh(4, 4.0f, 0.5f, 0.25f);
+    mesh.rotation.z = 3.1416f / 2;
+    mesh.translation.x = 2;
     if (!is_running)
     {
         return 1;

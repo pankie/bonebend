@@ -5,26 +5,28 @@
 #ifndef BONEBEND_MESH_H
 #define BONEBEND_MESH_H
 
-#define N_CUBE_VERTICES 8
-#define N_CUBE_MESH_FACES (6 * 2)
+#define MAX_BOX_VERTICES 256
+#define MAX_BOX_FACES 512
+
 #include "triangle.h"
 #include "vec.h"
 
-extern vec3_t cube_vertices[N_CUBE_VERTICES];
-extern face_t cube_faces[N_CUBE_MESH_FACES];
 extern uint32_t triangle_count;
 
 typedef struct
 {
-    vec3_t* vertices;
-    face_t* faces;
+    vec3_t vertices[MAX_BOX_VERTICES];
+    uint32_t vertices_count;
+
+    face_t faces[MAX_BOX_VERTICES];
+    uint32_t faces_count;
+
     vec3_t rotation;
-    vec3_t scale;
     vec3_t translation;
 } mesh_t;
 
 extern mesh_t mesh;
 
-void init_mesh(void);
+void init_mesh(int32_t ring_count, float length, float half_width, float half_depth);
 
 #endif //BONEBEND_MESH_H
