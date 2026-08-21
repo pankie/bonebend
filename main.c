@@ -3,6 +3,7 @@
 
 #include "mat4.h"
 #include "mesh.h"
+#include "skeleton.h"
 #include "triangle.h"
 #include "vec.h"
 
@@ -196,8 +197,8 @@ void update(void)
     time += dt;
     previous_frame_time = ticks;
 
-    mesh.rotation.z += sinf(time) * 0.025f;
-    mesh.translation.x += cosf(time) * 0.025f;
+    // mesh.rotation.z += sinf(time) * 0.025f;
+    // mesh.translation.x += cosf(time) * 0.025f;
 
     // rotation and translate the box
     const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
@@ -209,14 +210,17 @@ void update(void)
 
     num_triangles_to_render = 0;
 
+    mat4_t skin_matrices[MAX_BONES];
+    skeleton_update_pose(skin_matrices, time);
+
     for (size_t i = 0; i < mesh.faces_count; i++)
     {
         const face_t mesh_face = mesh.faces[i];
         const vec3_t face_vertices[] =
         {
-            mesh.vertices[mesh_face.a - 1],
-            mesh.vertices[mesh_face.b - 1],
-            mesh.vertices[mesh_face.c - 1]
+            skin_vertex_single_bone(mesh.vertices[mesh_face.a - 1], &skin_matrices[0]),
+            skin_vertex_single_bone(mesh.vertices[mesh_face.b - 1], &skin_matrices[0]),
+            skin_vertex_single_bone(mesh.vertices[mesh_face.c - 1], &skin_matrices[0])
         };
 
         vec4_t transformed_vertices[3];
@@ -249,9 +253,13 @@ void update(void)
 int main(void)
 {
     is_running = init_window();
+
     init_mesh(4, 4.0f, 0.5f, 0.25f);
+    init_skeleton(1, 1.0f);
     mesh.rotation.z = 3.1416f / 2;
     mesh.translation.x = 2;
+    mesh.translation.y = 2;
+
     if (!is_running)
     {
         return 1;
