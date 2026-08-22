@@ -15,10 +15,6 @@
 #define FRAME_TARGET_TIME (1000 / FPS)
 static uint64_t previous_frame_time = 0;
 
-#define RED 0xFFFF0000
-#define GREEN 0xFF00FF00
-#define BLUE 0xFF0000FF
-
 static SDL_Window *window = NULL;
 static SDL_Renderer* renderer = NULL;
 static SDL_Texture* color_buffer_texture = NULL;
@@ -33,16 +29,18 @@ static uint32_t num_triangles_to_render = 0;
 static mat4_t world_matrix;
 static float segment_length = 1.0f;
 
-static bool debug_text_key_map = true;
+#define RED 0xFFFF0000
+#define GREEN 0xFF00FF00
+#define BLUE 0xFF0000FF
 
-enum DEBUG_DISPLAY_SETTINGS
+enum DISPLAY_SETTINGS
 {
-    KEY_MAP = 0b001,
-    BONES   = 0b010,
-    MESH    = 0b100
+    KEY_MAP = 1 << 0,
+    BONES   = 1 << 1,
+    MESH    = 1 << 2
 };
 
-static enum DEBUG_DISPLAY_SETTINGS display_settings = KEY_MAP | BONES | MESH;
+static enum DISPLAY_SETTINGS display_settings = KEY_MAP | BONES | MESH;
 
 static bool init_window(void)
 {
@@ -139,8 +137,8 @@ static vec4_t screen_project(const vec4_t point)
     z = fmaxf(z, 0.1f);
 
     vec4_t projected_point;
-    projected_point.x = (fov_factor * point.x) / z + (float) WINDOW_WIDTH / 2;
-    projected_point.y = (fov_factor * -point.y) / z + (float) WINDOW_HEIGHT / 2; // flips y so that screen y grows downwards
+    projected_point.x = fov_factor * point.x / z + (float) WINDOW_WIDTH / 2;
+    projected_point.y = fov_factor * -point.y / z + (float) WINDOW_HEIGHT / 2; // flips y so that screen y grows downwards
     projected_point.z = z;
     projected_point.w = point.w;
     return projected_point;
@@ -156,26 +154,26 @@ static void process_input(void)
             is_running = false;
         }
 
-        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+        if (event.type == SDL_EVENT_KEY_DOWN)
         {
-            is_running = false;
+            switch (event.key.key)
+            {
+                case SDLK_ESCAPE:
+                    is_running = false;
+                    break;
+                case SDLK_H:
+                    display_settings ^= KEY_MAP;
+                    break;
+                case SDLK_B:
+                    display_settings ^= BONES;
+                    break;
+                case SDLK_M:
+                    display_settings ^= MESH;
+                    break;
+                default:
+                    break;
+            }
         }
-
-        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_H)
-        {
-            display_settings ^= KEY_MAP;
-        }
-
-        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_B)
-        {
-            display_settings ^= BONES;
-        }
-        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_M)
-        {
-            display_settings ^= MESH;
-        }
-
-
     }
 }
 
@@ -355,7 +353,7 @@ int main(void)
     segment_length = length / (float) (bone_count - 1);
 
     is_running = init_window();
-    init_mesh(4, length, 0.5f, 0.5f);
+    init_mesh(6, length, 0.5f, 0.5f);
     init_skeleton(bone_count, segment_length);
     assign_mesh_weights(bone_count, segment_length);
 
