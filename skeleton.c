@@ -3,6 +3,8 @@
 //
 
 #include "skeleton.h"
+
+#include <math.h>
 #include <SDL3/SDL_log.h>
 
 skeleton_t skeleton = {
@@ -80,6 +82,40 @@ vec3_t skin_vertex_lbs(const vec3_t v_bind, const int32_t bone_a, const int32_t 
     );
 
     return v_skinned;
+}
+
+dual_quat_t dual_quat_blend(const int32_t bone_a, const int32_t bone_b, const float weight_a, const dual_quat_t *dual_quaternions)
+{
+    const float weight_b = 1.0f - weight_a;
+
+    // 1. Sign consistency
+    const size_t bone_ref = 0; // we always pick first bone as reference
+    const dual_quat_t* dual_quat_ref = &dual_quaternions[bone_ref];
+
+    dual_quat_t dual_quat_a = dual_quaternions[bone_a];
+    if (bone_ref != bone_a && quat_inner_product(dual_quat_a.real, dual_quat_ref->real) < 0)
+    {
+        dual_quat_a = dual_quat_negate(&dual_quat_a);
+    }
+
+    dual_quat_t dual_quat_b = dual_quaternions[bone_b];
+    if (bone_ref != bone_b && quat_inner_product(dual_quat_b.real, dual_quat_ref->real) < 0)
+    {
+        dual_quat_b = dual_quat_negate(&dual_quat_b);
+    }
+
+    // 2. Weighted sum
+    const dual_quat_t dual_quat_a_w = dual_quat_mul_scalar(&dual_quat_a, weight_a);
+    const dual_quat_t dual_quat_b_w = dual_quat_mul_scalar(&dual_quat_b, weight_b);
+    const dual_quat_t b_hat = dual_quat_add(&dual_quat_a_w, &dual_quat_b_w);
+
+    // 3. Normalize (using only real part)
+    const float b_hat_norm = sqrtf( quat_inner_product(b_hat.real, b_hat.real) );
+    const float b_hat_norm_inverse = 1.f / b_hat_norm;
+
+    return (dual_quat_t) {
+        .real = quat_mul_scalar(b_hat.real, b_hat_norm_inverse), .dual = quat_mul_scalar(b_hat.dual, b_hat_norm_inverse)
+    };
 }
 
 vec3_t skin_vertex_single_bone(const vec3_t v_bind, const mat4_t *skin_matrix)

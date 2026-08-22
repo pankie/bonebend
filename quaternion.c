@@ -53,6 +53,16 @@ quat_t quat_mul_scalar(const quat_t p, const float s)
     return (quat_t){p.w * s, p.x * s, p.y * s, p.z * s};
 }
 
+float quat_inner_product(const quat_t p, const quat_t q)
+{
+    return p.w * q.w + p.x * q.x + p.y * q.y + p.z * q.z;
+}
+
+quat_t quat_add(const quat_t p, const quat_t q)
+{
+    return (quat_t) { p.w + q.w, p.x + q.x, p.y + q.y, p.z + q.z };
+}
+
 dual_quat_t dual_quat_from_mat4(const mat4_t *m)
 {
     const quat_t real = quat_from_mat4(m);
@@ -61,5 +71,26 @@ dual_quat_t dual_quat_from_mat4(const mat4_t *m)
 
     return (dual_quat_t){
         .real = real, .dual = dual
+    };
+}
+
+dual_quat_t dual_quat_negate(const dual_quat_t *p)
+{
+    return (dual_quat_t){
+        .real = quat_mul_scalar(p->real, -1), .dual = quat_mul_scalar(p->dual, -1)
+    };
+}
+
+dual_quat_t dual_quat_add(const dual_quat_t *p, const dual_quat_t *q)
+{
+    return (dual_quat_t) {
+        .real = quat_add(p->real, q->real), .dual = quat_add(p->dual, q->dual)
+    };
+}
+
+dual_quat_t dual_quat_mul_scalar(const dual_quat_t *p, const float s)
+{
+    return (dual_quat_t) {
+        .real = quat_mul_scalar(p->real, s), .dual = quat_mul_scalar(p->dual, s)
     };
 }
