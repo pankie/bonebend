@@ -31,6 +31,18 @@ static triangle_t triangles_to_render[MAX_TRIANGLES_TO_RENDER];
 static uint32_t num_triangles_to_render = 0;
 
 static mat4_t world_matrix;
+static float segment_length = 1.0f;
+
+static bool debug_text_key_map = true;
+
+enum DEBUG_DISPLAY_SETTINGS
+{
+    KEY_MAP = 0b001,
+    BONES   = 0b010,
+    MESH    = 0b100
+};
+
+static enum DEBUG_DISPLAY_SETTINGS display_settings = KEY_MAP | BONES | MESH;
 
 static bool init_window(void)
 {
@@ -121,7 +133,7 @@ static void clear_color_buffer(const uint32_t color)
 static vec4_t screen_project(const vec4_t point)
 {
     const float fov_factor = 500.0f;
-    const float camera_z = 3.0f;
+    const float camera_z = 6.0f;
 
     float z = point.z + camera_z;
     z = fmaxf(z, 0.1f);
@@ -148,6 +160,22 @@ static void process_input(void)
         {
             is_running = false;
         }
+
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_H)
+        {
+            display_settings ^= KEY_MAP;
+        }
+
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_B)
+        {
+            display_settings ^= BONES;
+        }
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_M)
+        {
+            display_settings ^= MESH;
+        }
+
+
     }
 }
 
@@ -192,16 +220,16 @@ static void draw_bone(const mat4_t* global_bind_transform, const mat4_t* skin_ma
 
     for (int32_t i = 0; i < 8; i++)
     {
-        vec4_t v_bind0 = mat4_mul_vec4(global_bind_transform, vec4_from_vec3(points[edge_indices[i][0]]));
-        vec4_t v_skinned0 = mat4_mul_vec4(skin_matrix, v_bind0);
-        vec4_t v_world0 = mat4_mul_vec4(&world_matrix, v_skinned0);
+        const vec4_t v_bind0 = mat4_mul_vec4(global_bind_transform, vec4_from_vec3(points[edge_indices[i][0]]));
+        const vec4_t v_skinned0 = mat4_mul_vec4(skin_matrix, v_bind0);
+        const vec4_t v_world0 = mat4_mul_vec4(&world_matrix, v_skinned0);
 
-        vec4_t v_bind1 = mat4_mul_vec4(global_bind_transform, vec4_from_vec3(points[edge_indices[i][1]]));
-        vec4_t v_skinned1 = mat4_mul_vec4(skin_matrix, v_bind1);
-        vec4_t v_world1 = mat4_mul_vec4(&world_matrix, v_skinned1);
+        const vec4_t v_bind1 = mat4_mul_vec4(global_bind_transform, vec4_from_vec3(points[edge_indices[i][1]]));
+        const vec4_t v_skinned1 = mat4_mul_vec4(skin_matrix, v_bind1);
+        const vec4_t v_world1 = mat4_mul_vec4(&world_matrix, v_skinned1);
 
-        vec4_t p0 = screen_project(v_world0);
-        vec4_t p1 = screen_project(v_world1);
+        const vec4_t p0 = screen_project(v_world0);
+        const vec4_t p1 = screen_project(v_world1);
 
         draw_line((int32_t)p0.x, (int32_t)p0.y, (int32_t)p1.x, (int32_t)p1.y, color);
     }
@@ -211,22 +239,41 @@ static void render(void)
 {
     clear_color_buffer(0xFF000000);
 
-    for (size_t i = 0; i < num_triangles_to_render; i++)
+    if (display_settings & MESH)
     {
-        draw_type_triangle(&triangles_to_render[i], GREEN);
+        for (size_t i = 0; i < num_triangles_to_render; i++)
+        {
+            draw_type_triangle(&triangles_to_render[i], GREEN);
+        }
     }
 
-    // const vec3_t bone_origin_world = get_bone_position(&skeleton.bones[0].global_bind_transform, &skeleton.skin_matrices[0], &world_matrix);
-    // const vec3_t bone_tip_world = get_bone_point_world((vec3_t){0.0f, 4.0f, 0.0f}, &skeleton.bones[0].global_bind_transform, &skeleton.skin_matrices[0], &world_matrix);
-    // const vec4_t p0 = screen_project(vec4_from_vec3(bone_origin_world));
-    // const vec4_t p1 = screen_project(vec4_from_vec3(bone_tip_world));
+    if (display_settings & BONES)
+    {
+        const size_t last_idx = skeleton.bones_count - 1;
+        for (size_t i = 0; i < last_idx; i++)
+        {
+            draw_bone(&skeleton.bones[i].global_bind_transform, &skeleton.skin_matrices[i], segment_length, 0.2f, RED);
+        }
 
-    // draw_line((int32_t) p0.x, (int32_t) p0.y, (int32_t) p1.x, (int32_t) p1.y, RED);
-
-    draw_bone(&skeleton.bones[0].global_bind_transform, &skeleton.skin_matrices[0], 4.0f, 0.1f, RED);
+        const vec3_t tip = get_bone_position(&skeleton.bones[last_idx].global_bind_transform, &skeleton.skin_matrices[last_idx], &world_matrix);
+        const vec4_t p = screen_project(vec4_from_vec3(tip));
+        draw_filled_circle((int32_t) p.x,  (int32_t) p.y, 8, RED);
+    }
 
     SDL_UpdateTexture(color_buffer_texture, NULL, color_buffer, WINDOW_WIDTH * sizeof(uint32_t));
     SDL_RenderTexture(renderer, color_buffer_texture, NULL, NULL);
+
+    if (display_settings & KEY_MAP)
+    {
+        SDL_SetRenderScale(renderer, 2.0f, 2.0f);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(renderer, 10, 5, "Q - Linear Blend Skinning");
+        SDL_RenderDebugText(renderer, 10, 20, "W - Dual Quaternion Linear Blending");
+        SDL_RenderDebugText(renderer, 10, 35, "H - Hide text");
+        SDL_RenderDebugText(renderer, 10, 50, "B - Hide bones");
+        SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    }
+
     SDL_RenderPresent(renderer);
 }
 
@@ -260,11 +307,17 @@ void update(void)
     for (size_t i = 0; i < mesh.faces_count; i++)
     {
         const face_t mesh_face = mesh.faces[i];
+
+        const int32_t
+            idx_a = mesh_face.a - 1,
+            idx_b = mesh_face.b - 1,
+            idx_c = mesh_face.c - 1;
+
         const vec3_t face_vertices[] =
         {
-            skin_vertex_single_bone(mesh.vertices[mesh_face.a - 1], &skeleton.skin_matrices[0]),
-            skin_vertex_single_bone(mesh.vertices[mesh_face.b - 1], &skeleton.skin_matrices[0]),
-            skin_vertex_single_bone(mesh.vertices[mesh_face.c - 1], &skeleton.skin_matrices[0])
+            skin_vertex_lbs(mesh.vertices[mesh_face.a - 1], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.skin_matrices),
+            skin_vertex_lbs(mesh.vertices[mesh_face.b - 1], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.skin_matrices),
+            skin_vertex_lbs(mesh.vertices[mesh_face.c - 1], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.skin_matrices)
         };
 
         vec4_t transformed_vertices[3];
@@ -296,12 +349,15 @@ void update(void)
 
 int main(void)
 {
-    is_running = init_window();
+    const int32_t bone_count = 4;
+    const float length = 4.0f;
 
-    init_mesh(4, 4.0f, 0.5f, 0.5f);
-    mesh.rotation.z = 3.1416f / 2;
-    mesh.translation.x = 2;
-    init_skeleton(1, 4.0f);
+    segment_length = length / (float) (bone_count - 1);
+
+    is_running = init_window();
+    init_mesh(4, length, 0.5f, 0.5f);
+    init_skeleton(bone_count, segment_length);
+    assign_mesh_weights(bone_count, segment_length);
 
     if (!is_running)
     {

@@ -3,6 +3,7 @@
 //
 
 #include "skeleton.h"
+#include <SDL3/SDL_log.h>
 
 skeleton_t skeleton = {
     .bones_count = 0
@@ -10,42 +11,81 @@ skeleton_t skeleton = {
 
 void init_skeleton(const int32_t bone_count, const float segment_length)
 {
-    int32_t parent_index = -1;
-    mat4_t local_transform = mat4_identity();
-    mat4_t global_bind_transform = mat4_identity();
-    mat4_t inverse_bind_pose = mat4_identity();
-
-    const mat4_t T = mat4_make_translation(0.0f, 0.0f, 0.0f);
-    const mat4_t R = mat4_make_rotation_z(0.0f);
-
-    // root bone has same global bind transform as local transform
-    local_transform = mat4_mul_mat4(&T, &R);
-    global_bind_transform = local_transform; // mat4_mul_mat4(&local_transform, I);
-    inverse_bind_pose = mat4_rigid_inverse(&global_bind_transform);
-
-    const bone_t bone = {
-        .parent_index = parent_index,
-        .local_transform = local_transform,
-        .global_bind_transform = global_bind_transform,
-        .inverse_bind_pose = inverse_bind_pose,
+    // root bone being identity rigid transform
+    skeleton.bones[0] = (bone_t) {
+        .parent_index = -1,
+        .local_transform = mat4_identity(),
+        .global_bind_transform = mat4_identity(),
+        .inverse_bind_pose = mat4_identity(),
     };
 
-    skeleton.bones_count = 1;
-    skeleton.bones[0] = bone;
+    skeleton.bones_count++;
+
+    // attach the chain of bones with each 'i' being parent to 'i - 1'
+    for (int32_t i = 1; i < bone_count; i++)
+    {
+        const bone_t* parent_bone = &skeleton.bones[i - 1];
+        const mat4_t local_transform = mat4_make_translation(0, segment_length, 0);
+        const mat4_t global_bind_transform = mat4_mul_mat4(&parent_bone->global_bind_transform, &local_transform);
+        const mat4_t inverse_bind_pose = mat4_rigid_inverse(&global_bind_transform);
+
+        skeleton.bones[i] = (bone_t) {
+            .parent_index = i - 1,
+            .local_transform = local_transform,
+            .global_bind_transform = global_bind_transform,
+            .inverse_bind_pose = inverse_bind_pose,
+        };
+
+        skeleton.bones_count++;
+    }
+
+    SDL_Log("Skeleton initialized with %d bones with segment length %.2f", skeleton.bones_count, segment_length);
 }
 
 void skeleton_update_pose(mat4_t* out_skin_matrices, const float time)
 {
-    const mat4_t L = mat4_make_rotation_z(time * 0.025f);
-    const mat4_t S = mat4_mul_mat4(&L, &skeleton.bones[0].inverse_bind_pose);
-    out_skin_matrices[0] = S;
+    // W_i^{new}, this frame, per bone
+    mat4_t world_pose[MAX_BONES];
+    for (size_t i = 0; i < skeleton.bones_count; i++)
+    {
+        const bone_t* bone = &skeleton.bones[i];
+        const mat4_t R = mat4_make_rotation_z(time * 0.25f);
+
+        const mat4_t L_new = mat4_mul_mat4(&bone->local_transform, &R); // L_i^{new}
+
+        if (bone->parent_index != -1)
+        {
+            // W_i^{new} = W_{p_i}^{new} * L_i^{new}
+            world_pose[i] = mat4_mul_mat4(&world_pose[bone->parent_index], &L_new);
+        }
+        else
+        {
+            // W_0^{new} = L_0^{new}
+            world_pose[i] = L_new;
+        }
+
+        // S_i = W_i^{new} * W_i^{-1}
+        out_skin_matrices[i] = mat4_mul_mat4(&world_pose[i], &bone->inverse_bind_pose);
+    }
 }
 
-vec3_t skin_vertex_single_bone(const vec3_t bind_v, const mat4_t *skin_matrix)
+vec3_t skin_vertex_lbs(const vec3_t v_bind, const int32_t bone_a, const int32_t bone_b, const float weight_a, const mat4_t *skin_matrices)
 {
-    const vec4_t converted = vec4_from_vec3(bind_v);
-    const vec4_t result = mat4_mul_vec4(skin_matrix, converted);
-    return vec3_from_vec4(result);
+    const float weight_b = 1 - weight_a;
+
+    // v_skinned =  w_a * S_a * v_bind + w_b * S_b * v_bind
+    const vec3_t v_skinned = vec3_add(
+        vec3_mul_scalar(skin_vertex_single_bone(v_bind, &skin_matrices[bone_a]), weight_a),
+        vec3_mul_scalar(skin_vertex_single_bone(v_bind, &skin_matrices[bone_b]), weight_b)
+    );
+
+    return v_skinned;
+}
+
+vec3_t skin_vertex_single_bone(const vec3_t v_bind, const mat4_t *skin_matrix)
+{
+    const vec4_t v_skinned = mat4_mul_vec4(skin_matrix, vec4_from_vec3(v_bind));
+    return vec3_from_vec4(v_skinned);
 }
 
 vec3_t get_bone_position(const mat4_t *global_bind_transform, const mat4_t *skin_matrix, const mat4_t *world_matrix)
