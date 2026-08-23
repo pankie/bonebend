@@ -47,8 +47,8 @@ void init_skeleton(const int32_t bone_count, const float segment_length)
 void skeleton_update_pose(mat4_t* out_skin_matrices, const float time)
 {
     const float speed = 0.025f;
-    const float angle_deg = (time * speed) * (180.0f / 3.1416f);
-    SDL_Log("Current rotation angle: %.1f degrees", angle_deg);
+    // const float angle_deg = (time * speed) * (180.0f / 3.1416f);
+    // SDL_Log("Current rotation angle: %.1f degrees", angle_deg);
 
     // W_i^{new}, this frame, per bone
     mat4_t world_pose[MAX_BONES];
@@ -103,17 +103,13 @@ dual_quat_t dual_quat_blend(const int32_t bone_a, const int32_t bone_b, const fl
     const float weight_b = 1.0f - weight_a;
 
     // 1. Sign consistency
-    const size_t bone_ref = 0; // we always pick first bone as reference
-    const dual_quat_t* dual_quat_ref = &dual_quaternions[bone_ref];
-
-    dual_quat_t dual_quat_a = dual_quaternions[bone_a];
-    if (bone_ref != bone_a && quat_inner_product(dual_quat_a.real, dual_quat_ref->real) < 0)
-    {
-        dual_quat_a = dual_quat_negate(&dual_quat_a);
-    }
-
+    const dual_quat_t dual_quat_a = dual_quaternions[bone_a];
     dual_quat_t dual_quat_b = dual_quaternions[bone_b];
-    if (bone_ref != bone_b && quat_inner_product(dual_quat_b.real, dual_quat_ref->real) < 0)
+
+    // as sign flips when |a - b| > 180 for net compounded angles of bones a and b, we are now using neighboring bone
+    // as a reference rather than comparing root bone 0 and bone 3 (which leads to a net angle (3 + 1) * theta) that exceeds 180 deg.
+    // This fix avoids the mesh to visually collapse
+    if (quat_inner_product(dual_quat_a.real, dual_quat_b.real) < 0)
     {
         dual_quat_b = dual_quat_negate(&dual_quat_b);
     }
