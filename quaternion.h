@@ -23,11 +23,14 @@ quat_t quat_from_mat4(const mat4_t* m);
 quat_t quat_mul_quat(quat_t p, quat_t q);
 quat_t quat_mul_scalar(quat_t p, float s);
 float quat_inner_product(quat_t p, quat_t q);
-quat_t quat_add(quat_t p, quat_t q);
+quat_t quat_add_quat(quat_t p, quat_t q);
+quat_t quat_conjugate(quat_t p);
 
 dual_quat_t dual_quat_from_mat4(const mat4_t* m);
 dual_quat_t dual_quat_negate(const dual_quat_t* p);
 dual_quat_t dual_quat_add(const dual_quat_t* p, const dual_quat_t* q);
 dual_quat_t dual_quat_mul_scalar(const dual_quat_t* p, float s);
+
+mat4_t dual_quat_to_mat4(const dual_quat_t* dual_quat);
 
 #endif //BONEBEND_QUATERNION_H

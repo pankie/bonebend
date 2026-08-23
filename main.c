@@ -28,6 +28,7 @@ static uint32_t num_triangles_to_render = 0;
 
 static mat4_t world_matrix;
 static float segment_length = 1.0f;
+mat4_t bone_draw_matrices[MAX_BONES];
 
 #define RED 0xFFFF0000
 #define GREEN 0xFF00FF00
@@ -35,12 +36,13 @@ static float segment_length = 1.0f;
 
 enum DISPLAY_SETTINGS
 {
-    KEY_MAP = 1 << 0,
+    TEXT    = 1 << 0,
     BONES   = 1 << 1,
-    MESH    = 1 << 2
+    MESH    = 1 << 2,
+    LBS     = 1 << 3, // linear blending skinning, default turned on.
 };
 
-static enum DISPLAY_SETTINGS display_settings = KEY_MAP | BONES | MESH;
+static enum DISPLAY_SETTINGS display_settings = TEXT | BONES | MESH | LBS;
 
 static bool init_window(void)
 {
@@ -162,13 +164,16 @@ static void process_input(void)
                     is_running = false;
                     break;
                 case SDLK_H:
-                    display_settings ^= KEY_MAP;
+                    display_settings ^= TEXT;
                     break;
                 case SDLK_B:
                     display_settings ^= BONES;
                     break;
                 case SDLK_M:
                     display_settings ^= MESH;
+                    break;
+                case SDLK_L:
+                    display_settings ^= LBS;
                     break;
                 default:
                     break;
@@ -211,12 +216,12 @@ static void draw_bone(const mat4_t* global_bind_transform, const mat4_t* skin_ma
         {0.0f, shoulder_height, -width},  // 5
     };
 
-    const int32_t edge_indices[8][2] = {
+    const size_t edge_indices[8][2] = {
         {0, 2}, {0, 3}, {0, 4}, {0, 5},
         {2, 1}, {3, 1}, {4, 1}, {5, 1},
     };
 
-    for (int32_t i = 0; i < 8; i++)
+    for (size_t i = 0; i < 8; i++)
     {
         const vec4_t v_bind0 = mat4_mul_vec4(global_bind_transform, vec4_from_vec3(points[edge_indices[i][0]]));
         const vec4_t v_skinned0 = mat4_mul_vec4(skin_matrix, v_bind0);
@@ -247,13 +252,14 @@ static void render(void)
 
     if (display_settings & BONES)
     {
+
         const size_t last_idx = skeleton.bones_count - 1;
         for (size_t i = 0; i < last_idx; i++)
         {
-            draw_bone(&skeleton.bones[i].global_bind_transform, &skeleton.skin_matrices[i], segment_length, 0.2f, RED);
+            draw_bone(&skeleton.bones[i].global_bind_transform, &bone_draw_matrices[i], segment_length, 0.2f, RED);
         }
 
-        const vec3_t tip = get_bone_position(&skeleton.bones[last_idx].global_bind_transform, &skeleton.skin_matrices[last_idx], &world_matrix);
+        const vec3_t tip = get_bone_position(&skeleton.bones[last_idx].global_bind_transform, &bone_draw_matrices[last_idx], &world_matrix);
         const vec4_t p = screen_project(vec4_from_vec3(tip));
         draw_filled_circle((int32_t) p.x,  (int32_t) p.y, 8, RED);
     }
@@ -261,14 +267,16 @@ static void render(void)
     SDL_UpdateTexture(color_buffer_texture, NULL, color_buffer, WINDOW_WIDTH * sizeof(uint32_t));
     SDL_RenderTexture(renderer, color_buffer_texture, NULL, NULL);
 
-    if (display_settings & KEY_MAP)
+    if (display_settings & TEXT)
     {
-        SDL_SetRenderScale(renderer, 2.0f, 2.0f);
+        const char* blend_mode = display_settings & LBS ? "Linear Blending Skinning" : "Dual Quaternion Linear Blending";
+        const float scaling = 2.0f;
+        SDL_SetRenderScale(renderer, scaling, scaling);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(renderer, 10, 5, "Q - Linear Blend Skinning");
-        SDL_RenderDebugText(renderer, 10, 20, "W - Dual Quaternion Linear Blending");
-        SDL_RenderDebugText(renderer, 10, 35, "H - Hide text");
-        SDL_RenderDebugText(renderer, 10, 50, "B - Hide bones");
+        SDL_RenderDebugText(renderer, 10, 5, "H - Hide text");
+        SDL_RenderDebugText(renderer, 10, 15, "B - Hide bones");
+        SDL_RenderDebugText(renderer, 10, 25, "L - Toggle Blending Mode");
+        SDL_RenderDebugTextFormat(renderer, 10, WINDOW_HEIGHT / scaling - 15, "Mode: %s", blend_mode);
         SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     }
 
@@ -300,7 +308,22 @@ void update(void)
     world_matrix = mat4_mul_mat4(&translate_matrix, &world_matrix);
 
     num_triangles_to_render = 0;
-    skeleton_update_pose(skeleton.skin_matrices, time);
+    if (display_settings & LBS)
+    {
+        skeleton_update_pose(skeleton.skin_matrices, time);
+        for (size_t i = 0; i < skeleton.bones_count; i++)
+        {
+            bone_draw_matrices[i] = skeleton.skin_matrices[i];
+        }
+    }
+    else
+    {
+        skeleton_update_pose_dual_quat(skeleton.dual_quaternions, time);
+        for (size_t i = 0; i < skeleton.bones_count; i++)
+        {
+            bone_draw_matrices[i] = dual_quat_to_mat4(&skeleton.dual_quaternions[i]);
+        }
+    }
 
     for (size_t i = 0; i < mesh.faces_count; i++)
     {
@@ -313,9 +336,15 @@ void update(void)
 
         const vec3_t face_vertices[] =
         {
-            skin_vertex_lbs(mesh.vertices[mesh_face.a - 1], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.skin_matrices),
-            skin_vertex_lbs(mesh.vertices[mesh_face.b - 1], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.skin_matrices),
-            skin_vertex_lbs(mesh.vertices[mesh_face.c - 1], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.skin_matrices)
+            display_settings & LBS
+                ? skin_vertex_lbs(mesh.vertices[mesh_face.a - 1], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.skin_matrices)
+                : skin_vertex_dqs(mesh.vertices[mesh_face.a - 1], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.dual_quaternions),
+            display_settings & LBS
+                ? skin_vertex_lbs(mesh.vertices[mesh_face.b - 1], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.skin_matrices)
+                : skin_vertex_dqs(mesh.vertices[mesh_face.b - 1], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.dual_quaternions),
+            display_settings & LBS
+                ? skin_vertex_lbs(mesh.vertices[mesh_face.c - 1], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.skin_matrices)
+                : skin_vertex_dqs(mesh.vertices[mesh_face.c - 1], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.dual_quaternions),
         };
 
         vec4_t transformed_vertices[3];

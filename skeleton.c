@@ -46,13 +46,16 @@ void init_skeleton(const int32_t bone_count, const float segment_length)
 
 void skeleton_update_pose(mat4_t* out_skin_matrices, const float time)
 {
+    const float speed = 0.025f;
+    const float angle_deg = (time * speed) * (180.0f / 3.1416f);
+    SDL_Log("Current rotation angle: %.1f degrees", angle_deg);
+
     // W_i^{new}, this frame, per bone
     mat4_t world_pose[MAX_BONES];
     for (size_t i = 0; i < skeleton.bones_count; i++)
     {
         const bone_t* bone = &skeleton.bones[i];
-        const mat4_t R = mat4_make_rotation_z(time * 0.25f);
-
+        const mat4_t R = mat4_make_rotation_z(time * speed);
         const mat4_t L_new = mat4_mul_mat4(&bone->local_transform, &R); // L_i^{new}
 
         if (bone->parent_index != -1)
@@ -68,6 +71,17 @@ void skeleton_update_pose(mat4_t* out_skin_matrices, const float time)
 
         // S_i = W_i^{new} * W_i^{-1}
         out_skin_matrices[i] = mat4_mul_mat4(&world_pose[i], &bone->inverse_bind_pose);
+    }
+}
+
+void skeleton_update_pose_dual_quat(dual_quat_t *out_dual_quaternions, const float time)
+{
+    mat4_t skin_matrices[MAX_BONES];
+    skeleton_update_pose(skin_matrices, time); // we reuse the existing chain of animations
+
+    for (size_t i = 0; i < skeleton.bones_count; i++)
+    {
+        out_dual_quaternions[i] = dual_quat_from_mat4(&skin_matrices[i]);
     }
 }
 
@@ -116,6 +130,14 @@ dual_quat_t dual_quat_blend(const int32_t bone_a, const int32_t bone_b, const fl
     return (dual_quat_t) {
         .real = quat_mul_scalar(b_hat.real, b_hat_norm_inverse), .dual = quat_mul_scalar(b_hat.dual, b_hat_norm_inverse)
     };
+}
+
+vec3_t skin_vertex_dqs(const vec3_t v_bind, const int32_t bone_a, const int32_t bone_b, const float weight_a,
+    const dual_quat_t *dual_quaternions)
+{
+    const dual_quat_t blended = dual_quat_blend(bone_a, bone_b, weight_a, dual_quaternions);
+    const mat4_t m = dual_quat_to_mat4(&blended);
+    return skin_vertex_single_bone(v_bind, &m);
 }
 
 vec3_t skin_vertex_single_bone(const vec3_t v_bind, const mat4_t *skin_matrix)
