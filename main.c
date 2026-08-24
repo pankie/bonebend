@@ -30,6 +30,13 @@ static mat4_t world_matrix;
 static float segment_length = 1.0f;
 mat4_t bone_draw_matrices[MAX_BONES];
 
+static chain_axis_t current_axis = AXIS_Y;
+
+// radians per second
+#define CAMERA_YAW_SPEED (3.1416f * 0.25f)
+static float orbit_angle = 0.0f;
+static bool LEFT = false, RIGHT = false;
+
 #define RED 0xFFFF0000
 #define GREEN 0xFF00FF00
 #define BLUE 0xFF0000FF
@@ -83,6 +90,19 @@ static void destroy_window(void)
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+}
+
+static void reload_scene(const chain_axis_t axis)
+{
+    const int32_t bone_count = 4;
+    const float length = 4.0f;
+    segment_length = length / (float) (bone_count - 1);
+
+    init_mesh(8, length, 0.5f, 0.5f, axis);
+    init_skeleton(bone_count, segment_length, axis);
+    assign_mesh_weights(bone_count, segment_length, axis);
+
+    current_axis = axis;
 }
 
 static void put_pixel(const int32_t x, const int32_t y, const uint32_t color)
@@ -175,6 +195,29 @@ static void process_input(void)
                 case SDLK_L:
                     display_settings ^= LBS;
                     break;
+                case SDLK_T:
+                    reload_scene(current_axis == AXIS_Y ? AXIS_Z : AXIS_Y);
+                    break;
+                case SDLK_LEFT:
+                    LEFT = true;
+                    break;
+                case SDLK_RIGHT:
+                    RIGHT = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if (event.type == SDL_EVENT_KEY_UP)
+        {
+            switch (event.key.key)
+            {
+                case SDLK_LEFT:
+                    LEFT = false;
+                    break;
+                case SDLK_RIGHT:
+                    RIGHT = false;
+                    break;
                 default:
                     break;
             }
@@ -203,17 +246,24 @@ static void draw_type_triangle(const triangle_t* triangle, const uint32_t color)
     );
 }
 
+static vec3_t bone_point(const chain_axis_t chain_axis, const float along, const float perp1, const float perp2)
+{
+    return chain_axis == AXIS_Y
+        ? (vec3_t){perp1, along, perp2}   // matches build_y_corners' (x, y, z) layout
+    : (vec3_t){perp1, perp2, along};  // matches build_z_corners' (x, y, z) layout
+}
+
 static void draw_bone(const mat4_t* global_bind_transform, const mat4_t* skin_matrix, const float length, const float width, const uint32_t color)
 {
     const float shoulder_height = length * 0.1f;
 
     const vec3_t points[6] = {
-        {0.0f, 0.0f, 0.0f},               // 0: origin
-        {0.0f, length, 0.0f},             // 1: tip
-        { width, shoulder_height, 0.0f},  // 2
-        {-width, shoulder_height, 0.0f},  // 3
-        {0.0f, shoulder_height,  width},  // 4
-        {0.0f, shoulder_height, -width},  // 5
+        bone_point(current_axis, 0.0f, 0.0f, 0.0f),              // 0: origin
+        bone_point(current_axis, length, 0.0f, 0.0f),            // 1: tip
+        bone_point(current_axis, shoulder_height, width, 0.0f),  // 2
+        bone_point(current_axis, shoulder_height, -width, 0.0f), // 3
+        bone_point(current_axis, shoulder_height, 0.0f, width),  // 4
+        bone_point(current_axis, shoulder_height, 0.0f, -width), // 5
     };
 
     const size_t edge_indices[8][2] = {
@@ -252,7 +302,6 @@ static void render(void)
 
     if (display_settings & BONES)
     {
-
         const size_t last_idx = skeleton.bones_count - 1;
         for (size_t i = 0; i < last_idx; i++)
         {
@@ -270,13 +319,16 @@ static void render(void)
     if (display_settings & TEXT)
     {
         const char* blend_mode = display_settings & LBS ? "Linear Blending Skinning" : "Dual Quaternion Linear Blending";
+        const char* presentation = current_axis == AXIS_Y ? "Elbow" : "Candy Wrapper";
         const float scaling = 2.0f;
         SDL_SetRenderScale(renderer, scaling, scaling);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(renderer, 10, 5, "H - Hide text");
-        SDL_RenderDebugText(renderer, 10, 15, "B - Hide bones");
-        SDL_RenderDebugText(renderer, 10, 25, "L - Toggle Blending Mode");
+        SDL_RenderDebugText(renderer, 10, 5, "H - Text");
+        SDL_RenderDebugText(renderer, 10, 15, "B - Bones");
+        SDL_RenderDebugText(renderer, 10, 25, "L - Blending Mode");
+        SDL_RenderDebugText(renderer, 10, 35, "T - Alignment Mode");
         SDL_RenderDebugTextFormat(renderer, 10, WINDOW_HEIGHT / scaling - 15, "Mode: %s", blend_mode);
+        SDL_RenderDebugTextFormat(renderer, 10, WINDOW_HEIGHT / scaling - 25, "Presentation: %s", presentation);
         SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     }
 
@@ -296,6 +348,19 @@ void update(void)
     time += dt;
     previous_frame_time = ticks;
 
+
+    float turn_direction = 0.0f;
+    if (LEFT)
+    {
+        turn_direction -= 1.0f;
+    }
+
+    if (RIGHT)
+    {
+        turn_direction += 1.0f;
+    }
+    orbit_angle += turn_direction * CAMERA_YAW_SPEED * dt;
+
     // mesh.rotation.z += sinf(time) * 0.025f;
     // mesh.translation.x += cosf(time) * 0.025f;
 
@@ -303,9 +368,10 @@ void update(void)
     const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
     const mat4_t rotation_matrix_z = mat4_make_rotation_z(mesh.rotation.z);
 
-    world_matrix = mat4_identity();
-    world_matrix = mat4_mul_mat4(&rotation_matrix_z, &world_matrix);
-    world_matrix = mat4_mul_mat4(&translate_matrix, &world_matrix);
+    const mat4_t object_world_matrix = mat4_mul_mat4(&translate_matrix, &rotation_matrix_z);
+
+    const mat4_t view_rotation = mat4_make_rotation_y(-orbit_angle);
+    world_matrix = mat4_mul_mat4(&view_rotation, &object_world_matrix);
 
     num_triangles_to_render = 0;
     if (display_settings & LBS)
@@ -376,21 +442,13 @@ void update(void)
 
 int main(void)
 {
-    const int32_t bone_count = 4;
-    const float length = 4.0f;
-
-    segment_length = length / (float) (bone_count - 1);
-
     is_running = init_window();
-    init_mesh(6, length, 0.5f, 0.5f);
-    init_skeleton(bone_count, segment_length);
-    assign_mesh_weights(bone_count, segment_length);
-
     if (!is_running)
     {
         return 1;
     }
 
+    reload_scene(current_axis);
     previous_frame_time = SDL_GetTicks(); // prevents delta time to be large meaningless spike on first frame
     while (is_running)
     {

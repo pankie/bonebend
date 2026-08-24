@@ -6,6 +6,7 @@
 
 #include <math.h>
 
+#include "skeleton.h"
 #include "SDL3/SDL_log.h"
 
 mesh_t mesh = {
@@ -13,21 +14,20 @@ mesh_t mesh = {
     .translation = {0, 0, 0},
 };
 
-void init_mesh(const int32_t ring_count, const float length, const float half_width, const float half_depth)
+void init_mesh(const int32_t ring_count, const float length, const float half_width, const float half_depth, const chain_axis_t chain_axis)
 {
     mesh.vertices_count = 0;
     mesh.faces_count = 0;
 
+    void (*build_corners_fn)(float w, float half_width, float half_depth, vec3_t *out_corners)
+        = chain_axis == AXIS_Y ? build_y_corners : build_z_corners;
+
     // 4 corners per ring, stacked along y from 0 to length
     for (int32_t r = 0; r < ring_count; r++)
     {
-        const float y = length * (float) r / (float)(ring_count - 1);
-        const vec3_t corners[4] = {
-            { -half_width, y, -half_depth },
-            {  half_width, y, -half_depth },
-            {  half_width, y,  half_depth },
-            { -half_width, y,  half_depth },
-        };
+        const float w = length * (float) r / (float)(ring_count - 1);
+        vec3_t corners[4];
+        build_corners_fn(w, half_width, half_depth, corners);
 
         for (size_t c = 0; c < 4; c++)
         {
@@ -110,11 +110,29 @@ void assign_weights(const float y, const float segment_length, const int32_t bon
     *weight_a = weight;
 }
 
-void assign_mesh_weights(const int32_t bone_count, const float segment_length)
+void assign_mesh_weights(const int32_t bone_count, const float segment_length, const chain_axis_t chain_axis)
 {
-    SDL_Log("Assigning mesh weights for %d verices", mesh.vertices_count);
     for (uint32_t i = 0; i < mesh.vertices_count; i++)
     {
-        assign_weights(mesh.vertices[i].y, segment_length, bone_count, &mesh.bone_a[i], &mesh.bone_b[i], &mesh.weight_a[i]);
+        const float component_vertex = chain_axis == AXIS_Y ? mesh.vertices[i].y : mesh.vertices[i].z;
+        assign_weights(component_vertex, segment_length, bone_count, &mesh.bone_a[i], &mesh.bone_b[i], &mesh.weight_a[i]);
     }
+
+    SDL_Log("Mesh weights assigned for %d vertices", mesh.vertices_count);
+}
+
+void build_y_corners(const float y, const float half_width, const float half_depth, vec3_t* corners)
+{
+    corners[0] = (vec3_t){-half_width, y, -half_depth};
+    corners[1] = (vec3_t){half_width, y, -half_depth};
+    corners[2] = (vec3_t){half_width, y, half_depth};
+    corners[3] = (vec3_t){-half_width, y, half_depth};
+}
+
+void build_z_corners(const float z, const float half_width, const float half_depth, vec3_t* corners)
+{
+    corners[0] = (vec3_t){-half_width, -half_depth, z};
+    corners[1] = (vec3_t){half_width, -half_depth, z};
+    corners[2] = (vec3_t){half_width, half_depth, z};
+    corners[3] = (vec3_t){-half_width, half_depth, z};
 }

@@ -11,8 +11,10 @@ skeleton_t skeleton = {
     .bones_count = 0
 };
 
-void init_skeleton(const int32_t bone_count, const float segment_length)
+void init_skeleton(const int32_t bone_count, const float segment_length, const chain_axis_t chain_axis)
 {
+    skeleton.bones_count = 0; // reset bones
+
     // root bone being identity rigid transform
     skeleton.bones[0] = (bone_t) {
         .parent_index = -1,
@@ -27,7 +29,15 @@ void init_skeleton(const int32_t bone_count, const float segment_length)
     for (int32_t i = 1; i < bone_count; i++)
     {
         const bone_t* parent_bone = &skeleton.bones[i - 1];
-        const mat4_t local_transform = mat4_make_translation(0, segment_length, 0);
+
+        const mat4_t translation = chain_axis == AXIS_Y
+            ? mat4_make_translation(0, segment_length, 0)
+            : mat4_make_translation(0, 0, segment_length);
+
+        // const mat4_t rotation = mat4_make_rotation_z(3.1416f * 0.5f);
+        // const mat4_t local_transform = mat4_mul_mat4(&translation, &rotation);
+        const mat4_t local_transform = translation;
+
         const mat4_t global_bind_transform = mat4_mul_mat4(&parent_bone->global_bind_transform, &local_transform);
         const mat4_t inverse_bind_pose = mat4_rigid_inverse(&global_bind_transform);
 

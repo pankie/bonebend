@@ -31,6 +31,16 @@ mat4_t mat4_make_rotation_z(const float angle_rad) {
     return m;
 }
 
+mat4_t mat4_make_rotation_y(const float angle_rad)
+{
+    const float c = cosf(angle_rad);
+    const float s = sinf(angle_rad);
+    mat4_t m = mat4_identity();
+    m.m[0][0] = c;   m.m[0][2] = s;
+    m.m[2][0] = -s;  m.m[2][2] = c;
+    return m;
+}
+
 mat4_t mat4_mul_mat4(const mat4_t* a, const mat4_t* b) {
     mat4_t result = {0};
     for (int row = 0; row < 4; row++) {

@@ -33,9 +33,15 @@ typedef struct
     dual_quat_t dual_quaternions[MAX_BONES]; // used exclusively for dual quaternion skinning
 } skeleton_t;
 
+// Build skeleton bones along certain axis along the box mesh
+typedef enum
+{
+    AXIS_Y, AXIS_Z
+} chain_axis_t;
+
 extern skeleton_t skeleton;
 
-void init_skeleton(int32_t bone_count, float segment_length);
+void init_skeleton(int32_t bone_count, float segment_length, chain_axis_t chain_axis);
 void skeleton_update_pose(mat4_t* out_skin_matrices, float time); // linear blend skinning
 void skeleton_update_pose_dual_quat(dual_quat_t* out_dual_quaternions, float time); // dual quaternion skinning
 
