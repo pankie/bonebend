@@ -5,6 +5,8 @@
 #include "renderer.h"
 #include <stdlib.h>
 
+#include "SDL3/SDL_log.h"
+
 SDL_Texture* color_buffer_texture = NULL;
 uint32_t* color_buffer = NULL;
 
@@ -150,4 +152,17 @@ void draw_type_triangle(const triangle_t* triangle, const uint32_t color)
         (int32_t) triangle->points[2].y,
         color
     );
+}
+
+uint32_t apply_light_intensity(const uint32_t color, float intensity)
+{
+    if (intensity < 0.0f) intensity = 0.0f;
+    if (intensity > 1.0f) intensity = 1.0f;
+
+    const uint32_t a = (color >> 24) & 0xFF;
+    const uint32_t r = (uint32_t)(((color >> 16) & 0xFF) * intensity);
+    const uint32_t g = (uint32_t)(((color >> 8) & 0xFF) * intensity);
+    const uint32_t b = (uint32_t)((color & 0xFF) * intensity);
+
+    return (a << 24) | (r << 16) | (g << 8) | b;
 }

@@ -20,6 +20,7 @@ static float time = 0.0f;
 #define MAX_TRIANGLES_TO_RENDER 1024
 static triangle_t triangles_to_render[MAX_TRIANGLES_TO_RENDER];
 static vec3_t triangle_normals[MAX_TRIANGLES_TO_RENDER];
+static uint32_t triangle_colors[MAX_TRIANGLES_TO_RENDER];
 static uint32_t num_triangles_to_render = 0;
 
 static mat4_t world_matrix;
@@ -38,6 +39,8 @@ static bool LEFT = false, RIGHT = false;
 #define RED 0xFFFF0000
 #define GREEN 0xFF00FF00
 #define BLUE 0xFF0000FF
+#define ORANGE (RED | GREEN)
+#define CYAN (GREEN | BLUE)
 
 enum DISPLAY_SETTINGS
 {
@@ -120,7 +123,7 @@ static void reload_scene(const chain_axis_t axis)
 // project assumes that we are looking down +Z from the origin, translates scene away from camera by z-component
 static vec4_t screen_project(const vec4_t point)
 {
-    const float fov_factor = 500.0f;
+    const float fov_factor = 900.0f;
     const float camera_z = 10.0f;
 
     float z = point.z + camera_z;
@@ -244,8 +247,11 @@ static void render(void)
         for (size_t i = 0; i < num_triangles_to_render; i++)
         {
             const triangle_t* triangle = &triangles_to_render[i];
-            draw_filled_triangle(triangle->points[0].x, triangle->points[0].y, triangle->points[1].x, triangle->points[1].y, triangle->points[2].x, triangle->points[2].y, GREEN);
-            draw_type_triangle(triangle, BLUE);
+            draw_filled_triangle(
+                triangle->points[0].x, triangle->points[0].y, triangle->points[1].x, triangle->points[1].y, triangle->points[2].x, triangle->points[2].y,
+                triangle_colors[i]);
+
+            draw_type_triangle(triangle, ORANGE);
         }
     }
 
@@ -254,12 +260,12 @@ static void render(void)
         const size_t last_idx = skeleton.bones_count - 1;
         for (size_t i = 0; i < last_idx; i++)
         {
-            draw_bone(&skeleton.bones[i].global_bind_transform, &bone_draw_matrices[i], segment_length, 0.2f, RED);
+            draw_bone(&skeleton.bones[i].global_bind_transform, &bone_draw_matrices[i], segment_length, 0.2f, CYAN);
         }
 
         const vec3_t tip = get_bone_position(&skeleton.bones[last_idx].global_bind_transform, &bone_draw_matrices[last_idx], &world_matrix);
         const vec4_t p = screen_project(vec4_from_vec3(tip));
-        draw_filled_circle((int32_t) p.x,  (int32_t) p.y, 8, RED);
+        draw_filled_circle((int32_t) p.x,  (int32_t) p.y, 8, CYAN);
     }
 
     SDL_UpdateTexture(color_buffer_texture, NULL, color_buffer, WINDOW_WIDTH * sizeof(uint32_t));
@@ -389,12 +395,16 @@ void update(void)
         const vec3_t triangle_point = vec3_from_vec4(transformed_vertices[0]);
         const vec3_t view_vector = vec3_sub(triangle_point, camera_position);
 
-        const float epsilon = 0.01f;
+        const vec3_t light_direction = (vec3_t) { 0.0f, 0.0f, -1.0f };
+
+        const float epsilon = 0.001f;
         // don't draw triangles that are not facing the camera
-        if (vec3_inner_product(normal, view_vector) >= epsilon)
+        if (vec3_inner_product(normal, view_vector) > epsilon)
         {
             triangle_normals[num_triangles_to_render] = normal;
             triangles_to_render[num_triangles_to_render] = projected_triangle;
+            const float light_intensity = max(0.0f, vec3_inner_product(light_direction, normal));
+            triangle_colors[num_triangles_to_render] = apply_light_intensity(RED, light_intensity);
 
             num_triangles_to_render++;
         }

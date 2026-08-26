@@ -25,5 +25,6 @@ void fill_flat_bottom_triangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, i
 void fill_flat_top_triangle(int32_t x1, int32_t y1, int32_t Mx, int32_t My, int32_t x2, int32_t y2, uint32_t color);
 void draw_filled_triangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color);
 void draw_type_triangle(const triangle_t* triangle, uint32_t color);
+uint32_t apply_light_intensity(uint32_t color, float intensity);
 
 #endif //BONEBEND_RENDERER_H
