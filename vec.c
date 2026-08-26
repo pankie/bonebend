@@ -4,6 +4,9 @@
 
 #include "vec.h"
 
+#include <math.h>
+#include <stdint.h>
+
 vec4_t vec4_from_vec3(const vec3_t v) {
     const vec4_t result = { v.x, v.y, v.z, 1.0f };
     return result;
@@ -29,6 +32,19 @@ vec3_t vec3_sub(vec3_t a, vec3_t b)
 {
     const vec3_t result = {a.x - b.x, a.y - b.y, a.z - b.z };
     return result;
+}
+
+vec3_t vec3_cross(const vec3_t a, const vec3_t b)
+{
+    return (vec3_t) {
+        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
+    };
+}
+
+vec3_t normalize(vec3_t v)
+{
+    const float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    return (vec3_t){ v.x / length, v.y / length, v.z / length };
 }
 
 

@@ -19,6 +19,7 @@ static float time = 0.0f;
 
 #define MAX_TRIANGLES_TO_RENDER 1024
 static triangle_t triangles_to_render[MAX_TRIANGLES_TO_RENDER];
+static vec3_t triangle_normals[MAX_TRIANGLES_TO_RENDER];
 static uint32_t num_triangles_to_render = 0;
 
 static mat4_t world_matrix;
@@ -346,14 +347,14 @@ void update(void)
         const vec3_t face_vertices[] =
         {
             display_settings & LBS
-                ? skin_vertex_lbs(mesh.vertices[mesh_face.a - 1], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.skin_matrices)
-                : skin_vertex_dqs(mesh.vertices[mesh_face.a - 1], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.dual_quaternions),
+                ? skin_vertex_lbs(mesh.vertices[idx_a], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.skin_matrices)
+                : skin_vertex_dqs(mesh.vertices[idx_a], mesh.bone_a[idx_a], mesh.bone_b[idx_a], mesh.weight_a[idx_a], skeleton.dual_quaternions),
             display_settings & LBS
-                ? skin_vertex_lbs(mesh.vertices[mesh_face.b - 1], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.skin_matrices)
-                : skin_vertex_dqs(mesh.vertices[mesh_face.b - 1], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.dual_quaternions),
+                ? skin_vertex_lbs(mesh.vertices[idx_b], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.skin_matrices)
+                : skin_vertex_dqs(mesh.vertices[idx_b], mesh.bone_a[idx_b], mesh.bone_b[idx_b], mesh.weight_a[idx_b], skeleton.dual_quaternions),
             display_settings & LBS
-                ? skin_vertex_lbs(mesh.vertices[mesh_face.c - 1], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.skin_matrices)
-                : skin_vertex_dqs(mesh.vertices[mesh_face.c - 1], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.dual_quaternions),
+                ? skin_vertex_lbs(mesh.vertices[idx_c], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.skin_matrices)
+                : skin_vertex_dqs(mesh.vertices[idx_c], mesh.bone_a[idx_c], mesh.bone_b[idx_c], mesh.weight_a[idx_c], skeleton.dual_quaternions),
         };
 
         vec4_t transformed_vertices[3];
@@ -379,7 +380,13 @@ void update(void)
             }
         };
 
-        triangles_to_render[num_triangles_to_render++] = projected_triangle;
+        // calculate normals for each triangle
+        const vec3_t edge1 = vec3_sub(vec3_from_vec4(transformed_vertices[1]), vec3_from_vec4(transformed_vertices[0]));
+        const vec3_t edge2 = vec3_sub(vec3_from_vec4(transformed_vertices[2]), vec3_from_vec4(transformed_vertices[0]));
+        triangle_normals[num_triangles_to_render] = normalize(vec3_cross(edge1, edge2));
+        triangles_to_render[num_triangles_to_render] = projected_triangle;
+
+        num_triangles_to_render++;
     }
 }
 
