@@ -19,6 +19,7 @@ vec4_t vec4_add(vec4_t a, vec4_t b);
 vec3_t vec3_add(vec3_t a, vec3_t b);
 vec3_t vec3_sub(vec3_t a, vec3_t b);
 vec3_t vec3_cross(vec3_t a, vec3_t b);
+float vec3_inner_product(vec3_t a, vec3_t b);
 vec3_t normalize(vec3_t v);
 vec4_t vec4_mul_scalar(vec4_t v, float s);
 vec3_t vec3_mul_scalar(vec3_t v, float s);

@@ -120,17 +120,17 @@ static void reload_scene(const chain_axis_t axis)
 // project assumes that we are looking down +Z from the origin, translates scene away from camera by z-component
 static vec4_t screen_project(const vec4_t point)
 {
-    const float fov_factor = 900.0f;
+    const float fov_factor = 500.0f;
     const float camera_z = 10.0f;
 
     float z = point.z + camera_z;
     z = fmaxf(z, 0.1f);
-
     vec4_t projected_point;
     projected_point.x = fov_factor * point.x / z + (float) WINDOW_WIDTH / 2;
     projected_point.y = fov_factor * -point.y / z + (float) WINDOW_HEIGHT / 2; // flips y so that screen y grows downwards
     projected_point.z = z;
     projected_point.w = point.w;
+
     return projected_point;
 }
 
@@ -383,10 +383,21 @@ void update(void)
         // calculate normals for each triangle
         const vec3_t edge1 = vec3_sub(vec3_from_vec4(transformed_vertices[1]), vec3_from_vec4(transformed_vertices[0]));
         const vec3_t edge2 = vec3_sub(vec3_from_vec4(transformed_vertices[2]), vec3_from_vec4(transformed_vertices[0]));
-        triangle_normals[num_triangles_to_render] = normalize(vec3_cross(edge1, edge2));
-        triangles_to_render[num_triangles_to_render] = projected_triangle;
+        const vec3_t normal = normalize(vec3_cross(edge1, edge2));
 
-        num_triangles_to_render++;
+        const vec3_t camera_position = {0.0f, 0.0f, 10.0f}; // assuming camera_z = 10.0f.
+        const vec3_t triangle_point = vec3_from_vec4(transformed_vertices[0]);
+        const vec3_t view_vector = vec3_sub(triangle_point, camera_position);
+
+        const float epsilon = 0.01f;
+        // don't draw triangles that are not facing the camera
+        if (vec3_inner_product(normal, view_vector) >= epsilon)
+        {
+            triangle_normals[num_triangles_to_render] = normal;
+            triangles_to_render[num_triangles_to_render] = projected_triangle;
+
+            num_triangles_to_render++;
+        }
     }
 }
 

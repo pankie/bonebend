@@ -123,10 +123,10 @@ void assign_mesh_weights(const int32_t bone_count, const float segment_length, c
 
 void build_y_corners(const float y, const float half_width, const float half_depth, vec3_t* corners)
 {
-    corners[0] = (vec3_t){-half_width, y, -half_depth};
-    corners[1] = (vec3_t){half_width, y, -half_depth};
-    corners[2] = (vec3_t){half_width, y, half_depth};
-    corners[3] = (vec3_t){-half_width, y, half_depth};
+    corners[0] = (vec3_t){-half_width, y, half_depth};
+    corners[1] = (vec3_t){half_width, y, half_depth};
+    corners[2] = (vec3_t){half_width, y, -half_depth};
+    corners[3] = (vec3_t){-half_width, y, -half_depth};
 }
 
 void build_z_corners(const float z, const float half_width, const float half_depth, vec3_t* corners)
