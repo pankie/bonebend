@@ -3,13 +3,10 @@
 
 #include "mat4.h"
 #include "mesh.h"
+#include "renderer.h"
 #include "skeleton.h"
 #include "triangle.h"
 #include "vec.h"
-
-#define WINDOW_WIDTH 1280
-#define WINDOW_HEIGHT 720
-#define BUFFER_SIZE WINDOW_WIDTH * WINDOW_HEIGHT
 
 #define FPS 30
 #define FRAME_TARGET_TIME (1000 / FPS)
@@ -17,8 +14,6 @@ static uint64_t previous_frame_time = 0;
 
 static SDL_Window *window = NULL;
 static SDL_Renderer* renderer = NULL;
-static SDL_Texture* color_buffer_texture = NULL;
-static uint32_t* color_buffer = NULL;
 static bool is_running = false;
 static float time = 0.0f;
 
@@ -121,50 +116,6 @@ static void reload_scene(const chain_axis_t axis)
 
 }
 
-static void put_pixel(const int32_t x, const int32_t y, const uint32_t color)
-{
-    if (x >= 0 && x < WINDOW_WIDTH && y >= 0 && y < WINDOW_HEIGHT)
-    {
-        color_buffer[y * WINDOW_WIDTH + x] = color;
-    }
-}
-
-// Bresenham's line algorithm - draws directly into the pixel buffer.
-static void draw_line(int32_t x0, int32_t y0, const int32_t x1, const int32_t y1, const uint32_t color) {
-    const int32_t dx = abs(x1 - x0);
-    const int32_t dy = -abs(y1 - y0);
-    const int32_t sx = x0 < x1 ? 1 : -1;
-    const int32_t sy = y0 < y1 ? 1 : -1;
-    int32_t err = dx + dy;
-
-    while (1) {
-        put_pixel(x0, y0, color);
-        if (x0 == x1 && y0 == y1) break;
-        int e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-}
-
-static void draw_filled_circle(const int32_t cx, const int32_t cy, const int32_t radius, const uint32_t color)
-{
-    for (int y = -radius; y <= radius; y++) {
-        for (int x = -radius; x <= radius; x++) {
-            if (x * x + y * y <= radius * radius) {
-                put_pixel(cx + x, cy + y, color);
-            }
-        }
-    }
-}
-
-static void clear_color_buffer(const uint32_t color)
-{
-    for (size_t i = 0; i < BUFFER_SIZE; i++)
-    {
-        color_buffer[i] = color;
-    }
-}
-
 // project assumes that we are looking down +Z from the origin, translates scene away from camera by z-component
 static vec4_t screen_project(const vec4_t point)
 {
@@ -241,27 +192,6 @@ static void process_input(void)
     }
 }
 
-
-static void draw_triangle(const int32_t x0, const int32_t y0, const int32_t x1, const int32_t y1, const int32_t x2, const int32_t y2, const uint32_t color)
-{
-    draw_line(x0, y0, x1, y1, color);
-    draw_line(x1, y1, x2, y2, color);
-    draw_line(x2, y2, x0, y0, color);
-}
-
-static void draw_type_triangle(const triangle_t* triangle, const uint32_t color)
-{
-    draw_triangle(
-        (int32_t) triangle->points[0].x,
-        (int32_t) triangle->points[0].y,
-        (int32_t) triangle->points[1].x,
-        (int32_t) triangle->points[1].y,
-        (int32_t) triangle->points[2].x,
-        (int32_t) triangle->points[2].y,
-        color
-    );
-}
-
 static vec3_t bone_point(const chain_axis_t chain_axis, const float along, const float perp1, const float perp2)
 {
     return chain_axis == AXIS_Y
@@ -312,7 +242,9 @@ static void render(void)
     {
         for (size_t i = 0; i < num_triangles_to_render; i++)
         {
-            draw_type_triangle(&triangles_to_render[i], GREEN);
+            const triangle_t* triangle = &triangles_to_render[i];
+            draw_filled_triangle(triangle->points[0].x, triangle->points[0].y, triangle->points[1].x, triangle->points[1].y, triangle->points[2].x, triangle->points[2].y, GREEN);
+            draw_type_triangle(triangle, BLUE);
         }
     }
 

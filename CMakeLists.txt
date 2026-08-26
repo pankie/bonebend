@@ -24,7 +24,9 @@ add_executable(bonebend main.c
         skeleton.c
         skeleton.h
         quaternion.c
-        quaternion.h)
+        quaternion.h
+        renderer.c
+        renderer.h)
 
 target_link_libraries(bonebend PRIVATE SDL3::SDL3)
 
