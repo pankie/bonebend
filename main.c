@@ -11,7 +11,7 @@
 #define WINDOW_HEIGHT 720
 #define BUFFER_SIZE WINDOW_WIDTH * WINDOW_HEIGHT
 
-#define FPS 24
+#define FPS 30
 #define FRAME_TARGET_TIME (1000 / FPS)
 static uint64_t previous_frame_time = 0;
 
@@ -30,6 +30,8 @@ static mat4_t world_matrix;
 static float segment_length = 1.0f;
 mat4_t bone_draw_matrices[MAX_BONES];
 
+#define BOX_LENGTH 6.0f
+#define BOX_RING_COUNT 8
 static chain_axis_t current_axis = AXIS_Y;
 
 // radians per second
@@ -95,14 +97,28 @@ static void destroy_window(void)
 static void reload_scene(const chain_axis_t axis)
 {
     const int32_t bone_count = 4;
-    const float length = 4.0f;
-    segment_length = length / (float) (bone_count - 1);
+    segment_length = BOX_LENGTH / (float) (bone_count - 1);
 
-    init_mesh(8, length, 0.5f, 0.5f, axis);
+    init_mesh(BOX_RING_COUNT, BOX_LENGTH, 0.5f, 0.5f, axis);
     init_skeleton(bone_count, segment_length, axis);
     assign_mesh_weights(bone_count, segment_length, axis);
 
     current_axis = axis;
+
+    const vec3_t center_offset = current_axis == AXIS_Y
+        ? (vec3_t){0.0f, 0.0f, 0.0f}
+        : (vec3_t){0.0f, 0.0f, -BOX_LENGTH / 2.0f};
+
+    if (current_axis == AXIS_Y)
+    {
+        mesh.translation.y = center_offset.y;
+        mesh.translation.z = 0;
+    } else
+    {
+        mesh.translation.y = 0;
+        mesh.translation.z = center_offset.z;
+    }
+
 }
 
 static void put_pixel(const int32_t x, const int32_t y, const uint32_t color)
@@ -152,8 +168,8 @@ static void clear_color_buffer(const uint32_t color)
 // project assumes that we are looking down +Z from the origin, translates scene away from camera by z-component
 static vec4_t screen_project(const vec4_t point)
 {
-    const float fov_factor = 500.0f;
-    const float camera_z = 6.0f;
+    const float fov_factor = 900.0f;
+    const float camera_z = 10.0f;
 
     float z = point.z + camera_z;
     z = fmaxf(z, 0.1f);
@@ -324,11 +340,11 @@ static void render(void)
         SDL_SetRenderScale(renderer, scaling, scaling);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDebugText(renderer, 10, 5, "H - Text");
-        SDL_RenderDebugText(renderer, 10, 15, "B - Bones");
-        SDL_RenderDebugText(renderer, 10, 25, "L - Blending Mode");
-        SDL_RenderDebugText(renderer, 10, 35, "T - Alignment Mode");
+        SDL_RenderDebugText(renderer, 10, 18, "B - Bones");
+        SDL_RenderDebugText(renderer, 10, 29, "L - Blending Mode");
+        SDL_RenderDebugText(renderer, 10, 40, "T - Alignment Mode");
         SDL_RenderDebugTextFormat(renderer, 10, WINDOW_HEIGHT / scaling - 15, "Mode: %s", blend_mode);
-        SDL_RenderDebugTextFormat(renderer, 10, WINDOW_HEIGHT / scaling - 25, "Presentation: %s", presentation);
+        SDL_RenderDebugText(renderer, WINDOW_WIDTH / scaling - 105, 5, presentation);
         SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     }
 
@@ -361,14 +377,9 @@ void update(void)
     }
     orbit_angle += turn_direction * CAMERA_YAW_SPEED * dt;
 
-    // mesh.rotation.z += sinf(time) * 0.025f;
-    // mesh.translation.x += cosf(time) * 0.025f;
-
     // rotation and translate the box
     const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
-    const mat4_t rotation_matrix_z = mat4_make_rotation_z(mesh.rotation.z);
-
-    const mat4_t object_world_matrix = mat4_mul_mat4(&translate_matrix, &rotation_matrix_z);
+    const mat4_t object_world_matrix = translate_matrix;
 
     const mat4_t view_rotation = mat4_make_rotation_y(-orbit_angle);
     world_matrix = mat4_mul_mat4(&view_rotation, &object_world_matrix);
