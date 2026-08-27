@@ -9,6 +9,7 @@
 
 SDL_Texture* color_buffer_texture = NULL;
 uint32_t* color_buffer = NULL;
+float* z_buffer = NULL;
 
 void swap(int32_t* a, int32_t* b)
 {
@@ -36,7 +37,7 @@ void draw_line(int32_t x0, int32_t y0, const int32_t x1, const int32_t y1, const
     while (1) {
         put_pixel(x0, y0, color);
         if (x0 == x1 && y0 == y1) break;
-        int e2 = 2 * err;
+        const int32_t e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
         if (e2 <= dx) { err += dx; y0 += sy; }
     }
@@ -58,6 +59,14 @@ void clear_color_buffer(const uint32_t color)
     for (size_t i = 0; i < BUFFER_SIZE; i++)
     {
         color_buffer[i] = color;
+    }
+}
+
+void clear_z_buffer(void)
+{
+    for (size_t i = 0; i < BUFFER_SIZE; i++)
+    {
+        z_buffer[i] = 0.0f;
     }
 }
 
@@ -138,6 +147,46 @@ void draw_filled_triangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_
 
         fill_flat_bottom_triangle(x0, y0, x1, y1, Mx, My, color);
         fill_flat_top_triangle(x1, y1, Mx, My, x2, y2, color);
+    }
+}
+
+void draw_filled_triangle_z_buffer(const vec4_t v0, const vec4_t v1, const vec4_t v2, const uint32_t color)
+{
+    int32_t x_min = (int32_t) fminf(v0.x, fminf(v1.x, v2.x));
+    int32_t x_max = (int32_t) fmaxf(v0.x, fmaxf(v1.x, v2.x));
+    int32_t y_min = (int32_t) fminf(v0.y, fminf(v1.y, v2.y));
+    int32_t y_max = (int32_t) fmaxf(v0.y, fmaxf(v1.y, v2.y));
+
+    if (x_min < 0) x_min = 0;
+    if (y_min < 0) y_min = 0;
+    if (x_max > WINDOW_WIDTH - 1)  x_max = WINDOW_WIDTH - 1;
+    if (y_max > WINDOW_HEIGHT - 1) y_max = WINDOW_HEIGHT - 1;
+
+    const vec2_t a = {v0.x, v0.y};
+    const vec2_t b = {v1.x, v1.y};
+    const vec2_t c = {v2.x, v2.y};
+
+    for (int32_t y = y_min; y <= y_max; y++)
+    {
+        for (int32_t x = x_min; x <= x_max; x++)
+        {
+            const vec2_t p = { (float) x, (float) y };
+            const vec3_t w = barycentric_weights(a, b, c, p);
+
+            if (w.x <0 || w.y < 0 || w.z < 0)
+            {
+                continue;
+            }
+
+            const float interpolated_reciprocal_w = 1.0f / v0.w * w.x + 1.0f / v1.w * w.y + 1.0f / v2.w * w.z;
+
+            const size_t idx = y * WINDOW_WIDTH + x;
+            if (interpolated_reciprocal_w > z_buffer[idx])
+            {
+                z_buffer[idx] = interpolated_reciprocal_w;
+                put_pixel(x, y, color);
+            }
+        }
     }
 }
 

@@ -63,3 +63,27 @@ vec3_t vec3_mul_scalar(const vec3_t v, const float s)
     const vec3_t result = { v.x * s, v.y * s, v.z * s };
     return result;
 }
+
+vec2_t vec2_sub(vec2_t a, vec2_t b)
+{
+    const vec2_t result = { a.x - b.x, a.y - b.y };
+    return result;
+}
+
+vec3_t barycentric_weights(const vec2_t a, const vec2_t b, const vec2_t c, const vec2_t p)
+{
+    const vec2_t ac = vec2_sub(c, a);
+    const vec2_t ab = vec2_sub(b, a);
+    const vec2_t pc = vec2_sub(c, p);
+    const vec2_t pb = vec2_sub(b, p);
+    const vec2_t ap = vec2_sub(p, a);
+
+    const float area_parallelogram_abc = ac.x * ab.y - ac.y * ab.x; // || AC x AB ||
+    const float alpha = (pc.x * pb.y - pc.y * pb.x) / area_parallelogram_abc;
+    const float beta = (ac.x * ap.y - ac.y * ap.x) / area_parallelogram_abc;
+    const float gamma = 1 - alpha - beta;
+
+    return (vec3_t) {
+        alpha, beta, gamma
+    };
+}

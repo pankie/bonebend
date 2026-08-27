@@ -72,6 +72,7 @@ static bool init_window(void)
     }
 
     color_buffer = malloc(sizeof(uint32_t) * BUFFER_SIZE);
+    z_buffer = malloc(sizeof(float) * BUFFER_SIZE);
 
     color_buffer_texture = SDL_CreateTexture(
         renderer,
@@ -241,17 +242,22 @@ static void draw_bone(const mat4_t* global_bind_transform, const mat4_t* skin_ma
 static void render(void)
 {
     clear_color_buffer(0xFF000000);
+    clear_z_buffer();
 
     if (display_settings & MESH)
     {
         for (size_t i = 0; i < num_triangles_to_render; i++)
         {
             const triangle_t* triangle = &triangles_to_render[i];
+
+            draw_filled_triangle_z_buffer(triangle->points[0], triangle->points[1], triangle->points[2], triangle_colors[i]);
+            draw_type_triangle(triangle, ORANGE);
+
+            /*
             draw_filled_triangle(
                 triangle->points[0].x, triangle->points[0].y, triangle->points[1].x, triangle->points[1].y, triangle->points[2].x, triangle->points[2].y,
                 triangle_colors[i]);
-
-            draw_type_triangle(triangle, ORANGE);
+            */
         }
     }
 

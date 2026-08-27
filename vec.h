@@ -6,6 +6,10 @@
 #define BONEBEND_VEC_H
 
 typedef struct {
+    float x, y;
+} vec2_t;
+
+typedef struct {
     float x, y, z;
 } vec3_t;
 
@@ -23,5 +27,7 @@ float vec3_inner_product(vec3_t a, vec3_t b);
 vec3_t normalize(vec3_t v);
 vec4_t vec4_mul_scalar(vec4_t v, float s);
 vec3_t vec3_mul_scalar(vec3_t v, float s);
+vec2_t vec2_sub(vec2_t a, vec2_t b);
+vec3_t barycentric_weights(vec2_t a, vec2_t b, vec2_t c, vec2_t p);
 
 #endif //BONEBEND_VEC_H
