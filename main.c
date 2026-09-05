@@ -1,6 +1,8 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <SDL3/SDL.h>
 
+#include "camera.h"
 #include "mat4.h"
 #include "mesh.h"
 #include "renderer.h"
@@ -32,9 +34,9 @@ mat4_t bone_draw_matrices[MAX_BONES];
 static chain_axis_t current_axis = AXIS_Y;
 
 // radians per second
-#define CAMERA_YAW_SPEED (3.1416f * 0.25f)
-static float orbit_angle = 0.0f;
 static bool LEFT = false, RIGHT = false;
+static camera_t camera;
+static float obj_rotation = 0.0f;
 
 #define RED 0xFFFF0000
 #define GREEN 0xFF00FF00
@@ -73,7 +75,8 @@ static bool init_window(void)
 
     color_buffer = malloc(sizeof(uint32_t) * BUFFER_SIZE);
     z_buffer = malloc(sizeof(float) * BUFFER_SIZE);
-
+    camera = construct_camera(3.1416f / 10.0f, (float) WINDOW_WIDTH / WINDOW_WIDTH, 0.5f, 50.0f);
+    camera.position = (vec3_t) {0, 0, 50.0f},
     color_buffer_texture = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_ARGB8888,
@@ -107,34 +110,35 @@ static void reload_scene(const chain_axis_t axis)
 
     const vec3_t center_offset = current_axis == AXIS_Y
         ? (vec3_t){0.0f, 0.0f, 0.0f}
-        : (vec3_t){0.0f, 0.0f, -BOX_LENGTH / 2.0f};
+        : (vec3_t){-BOX_LENGTH / 2.0f, 0.0f, 20.0f};
 
-    if (current_axis == AXIS_Y)
-    {
-        mesh.translation.y = center_offset.y;
-        mesh.translation.z = 0;
-    } else
-    {
-        mesh.translation.y = 0;
-        mesh.translation.z = center_offset.z;
-    }
-
+    mesh.translation.x = center_offset.x;
+    mesh.translation.y = center_offset.y;
+    mesh.translation.z = center_offset.z;
 }
 
-// project assumes that we are looking down +Z from the origin, translates scene away from camera by z-component
 static vec4_t screen_project(const vec4_t point)
 {
-    const float fov_factor = 900.0f;
-    const float camera_z = 10.0f;
+    // world -> camera space
+    vec4_t transformed_point = mat4_mul_vec4(&camera.view, point);
 
-    float z = point.z + camera_z;
-    z = fmaxf(z, 0.1f);
+    // camera -> clip space
+    transformed_point = mat4_mul_vec4(&camera.projection, transformed_point);
+
+    // clip space -> NDC
+    if (transformed_point.w != 0.0f)
+    {
+        transformed_point.x /= transformed_point.w;
+        transformed_point.y /= transformed_point.w;
+        transformed_point.z /= transformed_point.w;
+    }
+
+    // NDC -> screen
     vec4_t projected_point;
-    projected_point.x = fov_factor * point.x / z + (float) WINDOW_WIDTH / 2;
-    projected_point.y = fov_factor * -point.y / z + (float) WINDOW_HEIGHT / 2; // flips y so that screen y grows downwards
-    projected_point.z = z;
-    projected_point.w = point.w;
-
+    projected_point.x = (transformed_point.x + 1.0f) * 0.5f * (float) WINDOW_WIDTH;
+    projected_point.y = (1.0f - transformed_point.y) * 0.5f * (float) WINDOW_HEIGHT;
+    projected_point.z = transformed_point.z;
+    projected_point.w = transformed_point.w;
     return projected_point;
 }
 
@@ -252,12 +256,6 @@ static void render(void)
 
             draw_filled_triangle_z_buffer(triangle->points[0], triangle->points[1], triangle->points[2], triangle_colors[i]);
             draw_type_triangle(triangle, ORANGE);
-
-            /*
-            draw_filled_triangle(
-                triangle->points[0].x, triangle->points[0].y, triangle->points[1].x, triangle->points[1].y, triangle->points[2].x, triangle->points[2].y,
-                triangle_colors[i]);
-            */
         }
     }
 
@@ -290,6 +288,11 @@ static void render(void)
         SDL_RenderDebugText(renderer, 10, 40, "T - Alignment Mode");
         SDL_RenderDebugTextFormat(renderer, 10, WINDOW_HEIGHT / scaling - 15, "Mode: %s", blend_mode);
         SDL_RenderDebugText(renderer, WINDOW_WIDTH / scaling - 105, 5, presentation);
+        /*
+        SDL_RenderDebugTextFormat(renderer, 150, 150, "view = (%2f, %2f, %2f)", camera.direction.x, camera.direction.y, camera.direction.z);
+        SDL_RenderDebugTextFormat(renderer, 150, 157, "position = (%2f, %2f, %2f)", camera.position.x, camera.position.y, camera.position.z);
+        SDL_RenderDebugTextFormat(renderer, 150, 166, "mesh_translation = (%2f, %2f, %2f)", mesh.translation.x, mesh.translation.y, mesh.translation.z);
+        */
         SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     }
 
@@ -320,14 +323,16 @@ void update(void)
     {
         turn_direction += 1.0f;
     }
-    orbit_angle += turn_direction * CAMERA_YAW_SPEED * dt;
+
+    obj_rotation += turn_direction * 3.1416f * 0.5f * dt;
 
     // rotation and translate the box
+    const mat4_t rotation_matrix = mat4_make_rotation_y(obj_rotation);
     const mat4_t translate_matrix = mat4_make_translation(mesh.translation.x, mesh.translation.y, mesh.translation.z);
-    const mat4_t object_world_matrix = translate_matrix;
+    const mat4_t object_world_matrix = mat4_mul_mat4(&translate_matrix, &rotation_matrix);
+    world_matrix = object_world_matrix;
 
-    const mat4_t view_rotation = mat4_make_rotation_y(-orbit_angle);
-    world_matrix = mat4_mul_mat4(&view_rotation, &object_world_matrix);
+    update_view_camera(&camera);
 
     num_triangles_to_render = 0;
     if (display_settings & LBS)
@@ -395,21 +400,21 @@ void update(void)
         // calculate normals for each triangle
         const vec3_t edge1 = vec3_sub(vec3_from_vec4(transformed_vertices[1]), vec3_from_vec4(transformed_vertices[0]));
         const vec3_t edge2 = vec3_sub(vec3_from_vec4(transformed_vertices[2]), vec3_from_vec4(transformed_vertices[0]));
-        const vec3_t normal = normalize(vec3_cross(edge1, edge2));
+        const vec3_t normal = vec3_normalize(vec3_cross(edge1, edge2));
 
-        const vec3_t camera_position = {0.0f, 0.0f, 10.0f}; // assuming camera_z = 10.0f.
         const vec3_t triangle_point = vec3_from_vec4(transformed_vertices[0]);
-        const vec3_t view_vector = vec3_sub(triangle_point, camera_position);
+        const vec3_t view_vector = vec3_sub(triangle_point, camera.position);
 
         const vec3_t light_direction = (vec3_t) { 0.0f, 0.0f, -1.0f };
 
         const float epsilon = 0.001f;
         // don't draw triangles that are not facing the camera
-        if (vec3_inner_product(normal, view_vector) > epsilon)
+        if (vec3_dot_product(normal, view_vector) > epsilon)
         {
             triangle_normals[num_triangles_to_render] = normal;
             triangles_to_render[num_triangles_to_render] = projected_triangle;
-            const float light_intensity = max(0.0f, vec3_inner_product(light_direction, normal));
+            const float light_intensity = max(0.0f, vec3_dot_product(light_direction, normal));
+            // const float light_intensity = 1.0f;
             triangle_colors[num_triangles_to_render] = apply_light_intensity(RED, light_intensity);
 
             num_triangles_to_render++;

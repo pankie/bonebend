@@ -41,12 +41,12 @@ vec3_t vec3_cross(const vec3_t a, const vec3_t b)
     };
 }
 
-float vec3_inner_product(const vec3_t a, const vec3_t b)
+float vec3_dot_product(const vec3_t a, const vec3_t b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-vec3_t normalize(const vec3_t v)
+vec3_t vec3_normalize(const vec3_t v)
 {
     const float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
     return (vec3_t){ v.x / length, v.y / length, v.z / length };

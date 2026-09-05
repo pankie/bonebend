@@ -56,7 +56,7 @@ void init_skeleton(const int32_t bone_count, const float segment_length, const c
 
 void skeleton_update_pose(mat4_t* out_skin_matrices, const float time)
 {
-    const float speed = 0.025f;
+    const float speed = 0.25f;
     // const float angle_deg = (time * speed) * (180.0f / 3.1416f);
     // SDL_Log("Current rotation angle: %.1f degrees", angle_deg);
 
